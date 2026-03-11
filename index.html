@@ -227,7 +227,7 @@
 // 🔧 CONFIG — ใส่ Web App URL หลัง Deploy Apps Script
 //    ถ้ายังไม่ได้ Deploy ระบบจะใช้ STAFF_DB ด้านล่างแทนอัตโนมัติ
 // ================================================================
-const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbze7Y4Ax1GfsWcfDkatvbAbNrILQAoQou1T8LVxe8yiYqhZaVIZsTTJ7dsABO1woJb5/exec';
+const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/YOUR_SCRIPT_ID/exec';
 const URL_CONFIGURED  = !APPS_SCRIPT_URL.includes('YOUR_SCRIPT_ID');
 
 // ================================================================
@@ -315,7 +315,8 @@ function selectStatus(type) {
 // ================================================================
 // Employee Lookup — ค้นจาก cache ก่อน ถ้าไม่มีค่อย fetch ทีละคน
 // ================================================================
-let debounceTimer = null;
+let debounceTimer  = null;
+let lookupVersion  = 0; // ป้องกัน race condition — lookup เก่า overwrite ผลใหม่
 
 function onEmpIdInput() {
   clearTimeout(debounceTimer);
@@ -323,31 +324,36 @@ function onEmpIdInput() {
   const id = document.getElementById('empId').value.trim();
   if (id.length >= 3) {
     document.getElementById('idSpinner').classList.add('show');
-    debounceTimer = setTimeout(() => lookupEmployee(id), 400);
+    debounceTimer = setTimeout(() => lookupEmployee(id), 500);
+  } else {
+    document.getElementById('idSpinner').classList.remove('show');
   }
 }
 
 async function lookupEmployee(id) {
-  // รอ preload ให้เสร็จก่อน (กรณีกรอกเร็วมากตอนหน้าเพิ่งเปิด)
-  if (!staffLoaded) {
-    await preloadStaff();
-  }
+  const myVersion = ++lookupVersion; // version นี้เป็นของ request นี้เท่านั้น
+
+  if (!staffLoaded) await preloadStaff();
 
   document.getElementById('idSpinner').classList.remove('show');
 
-  // ค้นจาก cache
+  // ถ้ามี lookup ใหม่กว่าเริ่มทำงานแล้ว → ยกเลิก
+  if (myVersion !== lookupVersion) return;
+
   if (staffCache[id]) {
+    if (myVersion !== lookupVersion) return;
     fillEmpFields(id, staffCache[id]);
     return;
   }
 
-  // ไม่เจอใน cache และ URL พร้อม → fetch ทีละคน (fallback)
   if (URL_CONFIGURED) {
     document.getElementById('idSpinner').classList.add('show');
     try {
-      const res  = await fetch(`${APPS_SCRIPT_URL}?action=getStaff&empId=${encodeURIComponent(id)}`);
-      const json = await res.json();
+      const res  = await fetch(`${APPS_SCRIPT_URL}?action=getStaff&empId=${encodeURIComponent(id)}`, { redirect: 'follow' });
+      const text = await res.text();
+      const json = JSON.parse(text);
       document.getElementById('idSpinner').classList.remove('show');
+      if (myVersion !== lookupVersion) return; // มี request ใหม่แล้ว
       if (json.success && json.emp) {
         staffCache[id] = { name: json.emp.name, position: json.emp.position || '', dept: json.emp.dept };
         fillEmpFields(id, staffCache[id]);
@@ -355,9 +361,11 @@ async function lookupEmployee(id) {
       }
     } catch(e) {
       document.getElementById('idSpinner').classList.remove('show');
+      if (myVersion !== lookupVersion) return;
     }
   }
 
+  if (myVersion !== lookupVersion) return;
   showNotFound();
 }
 
