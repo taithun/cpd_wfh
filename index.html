@@ -207,27 +207,13 @@
 </div>
 
 <div class="today-box">
-  <div class="today-header">📋 บันทึกวันนี้</div>
+  <div class="today-header" style="display:flex;align-items:center;justify-content:space-between">
+    <span>📋 บันทึกวันนี้</span>
+    <span id="logCount" style="font-size:11px;color:var(--accent);font-family:'IBM Plex Mono',monospace"></span>
+  </div>
   <div id="logList">
-    <div class="today-entry">
-      <div>
-        <div class="entry-name">สมชาย รักงาน</div>
-        <div style="font-size:11px;color:var(--muted);margin-top:2px">ฝ่าย Compliance</div>
-      </div>
-      <div class="entry-meta">
-        <span class="tag tag-wfh">WFH</span>
-        <span class="entry-time">08:32 น.</span>
-      </div>
-    </div>
-    <div class="today-entry">
-      <div>
-        <div class="entry-name">วิไล ดีใจ</div>
-        <div style="font-size:11px;color:var(--muted);margin-top:2px">ฝ่ายการเงิน</div>
-      </div>
-      <div class="entry-meta">
-        <span class="tag tag-office">Office</span>
-        <span class="entry-time">08:15 น.</span>
-      </div>
+    <div style="text-align:center;padding:20px;color:var(--muted);font-size:13px">
+      ⏳ กำลังโหลด...
     </div>
   </div>
 </div>
@@ -241,7 +227,7 @@
 // 🔧 CONFIG — ใส่ Web App URL หลัง Deploy Apps Script
 //    ถ้ายังไม่ได้ Deploy ระบบจะใช้ STAFF_DB ด้านล่างแทนอัตโนมัติ
 // ================================================================
-const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbze7Y4Ax1GfsWcfDkatvbAbNrILQAoQou1T8LVxe8yiYqhZaVIZsTTJ7dsABO1woJb5/exec';
+const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/YOUR_SCRIPT_ID/exec';
 const URL_CONFIGURED  = !APPS_SCRIPT_URL.includes('YOUR_SCRIPT_ID');
 
 // ================================================================
@@ -308,8 +294,9 @@ function updateClock() {
 }
 setInterval(updateClock,1000); updateClock();
 
-// โหลดรายชื่อพนักงานทั้งหมดจาก Sheet ทันทีที่หน้าเปิด
+// โหลดข้อมูลตอนเปิดหน้า
 preloadStaff();
+loadTodayLog();
 
 // ================================================================
 // Status Toggle
@@ -462,8 +449,9 @@ async function submitCheckin() {
     const result = await postData(data);
     if (result.success) {
       showMsg(`✅ บันทึกเวลาเข้างาน ${data.time} น. เรียบร้อย (${data.status})`, 'success');
-      addLogEntry(data);
       btn.textContent = `✅ เข้างานแล้ว ${data.time} น.`;
+      addLogEntry(data);          // เพิ่มทันทีก่อน
+      setTimeout(loadTodayLog, 1500); // แล้ว reload จาก server
     } else throw new Error(result.error || 'Unknown error');
   } catch(e) {
     showMsg('❌ เกิดข้อผิดพลาด: ' + e.message, 'error');
@@ -490,6 +478,50 @@ async function submitCheckout() {
   } catch(e) {
     showMsg('❌ เกิดข้อผิดพลาด: ' + e.message, 'error');
     btn.disabled = false; btn.textContent = '🚪 บันทึกเวลาออกงาน';
+  }
+}
+
+// ================================================================
+// Today Log — ดึงจาก Apps Script จริง
+// ================================================================
+async function loadTodayLog() {
+  const list = document.getElementById('logList');
+
+  if (!URL_CONFIGURED) {
+    list.innerHTML = '<div style="text-align:center;padding:20px;color:var(--muted);font-size:13px">⚙️ (Demo mode — บันทึกจริงจะแสดงหลัง Deploy)</div>';
+    return;
+  }
+
+  try {
+    const res  = await fetch(`${APPS_SCRIPT_URL}?action=getToday`);
+    const json = await res.json();
+
+    if (!json.success || !json.data.length) {
+      list.innerHTML = '<div style="text-align:center;padding:20px;color:var(--muted);font-size:13px">ยังไม่มีการบันทึกวันนี้</div>';
+      document.getElementById('logCount').textContent = '0 รายการ';
+      return;
+    }
+
+    // กรองเฉพาะ CHECKIN แสดงในลิสต์
+    const checkins = json.data.filter(r => r['Action'] === 'CHECKIN');
+    document.getElementById('logCount').textContent = `${checkins.length} คน`;
+    list.innerHTML = checkins.map(r => {
+      const tagClass = r['สถานะ'] === 'WFH' ? 'tag-wfh' : 'tag-office';
+      return `
+        <div class="today-entry">
+          <div>
+            <div class="entry-name">${r['ชื่อ-นามสกุล']}</div>
+            <div style="font-size:11px;color:var(--muted);margin-top:2px">${r['สังกัด'] || r['ฝ่าย'] || ''}</div>
+          </div>
+          <div class="entry-meta">
+            <span class="tag ${tagClass}">${r['สถานะ']}</span>
+            <span class="entry-time">${r['เวลา']} น.</span>
+          </div>
+        </div>`;
+    }).join('');
+
+  } catch(e) {
+    list.innerHTML = '<div style="text-align:center;padding:16px;color:var(--danger);font-size:13px">⚠ โหลดข้อมูลไม่สำเร็จ</div>';
   }
 }
 
