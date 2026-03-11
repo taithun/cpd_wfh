@@ -526,10 +526,10 @@ async function loadTodayLog() {
     const checkins = (json.data || []).filter(r => r['Action'] === 'CHECKIN');
     counter.textContent = checkins.length ? `${checkins.length} คน` : '';
 
-    if (!checkins.length) {
-      list.innerHTML = '<div style="text-align:center;padding:20px;color:var(--muted);font-size:13px">ยังไม่มีการบันทึกวันนี้</div>';
-      return;
-    }
+   // if (!checkins.length) {
+   //   list.innerHTML = '<div style="text-align:center;padding:20px;color:var(--muted);font-size:13px">ยังไม่มีการบันทึกวันนี้</div>';
+   //   return;
+   // }
 
     list.innerHTML = checkins.map(r => {
       const tagClass = r['สถานะ'] === 'WFH' ? 'tag-wfh' : 'tag-office';
