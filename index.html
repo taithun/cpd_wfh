@@ -496,20 +496,20 @@ async function submitCheckout() {
 // ================================================================
 // Today Log — ดึงจาก Apps Script จริง
 // ================================================================
-async function loadTodayLog() {
-  const list    = document.getElementById('logList');
-  const counter = document.getElementById('logCount');
+//async function loadTodayLog() {
+//  const list    = document.getElementById('logList');
+//  const counter = document.getElementById('logCount');
 
-  if (!URL_CONFIGURED) {
-    list.innerHTML = '<div style="text-align:center;padding:20px;color:var(--muted);font-size:13px">⚙️ Demo mode — บันทึกจริงจะแสดงหลัง Deploy</div>';
-    return;
-  }
+//  if (!URL_CONFIGURED) {
+//    list.innerHTML = '<div style="text-align:center;padding:20px;color:var(--muted);font-size:13px">⚙️ Demo mode — บันทึกจริงจะแสดงหลัง Deploy</div>';
+//    return;
+//  }
 
-  try {
-    const res = await fetch(`${APPS_SCRIPT_URL}?action=getToday`, {
-      method:   'GET',
-      redirect: 'follow'
-    });
+//  try {
+//    const res = await fetch(`${APPS_SCRIPT_URL}?action=getToday`, {
+//      method:   'GET',
+//      redirect: 'follow'
+//    });
 
     // ป้องกัน Apps Script คืน HTML แทน JSON
     const text = await res.text();
