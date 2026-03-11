@@ -1,0 +1,524 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ระบบลงเวลาปฏิบัติงาน</title>
+<link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0d1117; --surface: #161b22; --surface2: #1c2330;
+    --border: #30363d; --accent: #00b4d8;
+    --wfh: #06d6a0; --office: #f77f00;
+    --text: #e6edf3; --muted: #8b949e; --danger: #f85149;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body {
+    font-family:'Sarabun',sans-serif; background:var(--bg); color:var(--text);
+    min-height:100vh; display:flex; flex-direction:column;
+    align-items:center; padding:0 16px 48px;
+  }
+  .top-bar {
+    width:100%; max-width:540px; display:flex;
+    align-items:center; justify-content:space-between;
+    padding:20px 0 0; margin-bottom:8px;
+  }
+  .logo { display:flex; align-items:center; gap:10px; }
+  .logo-dot {
+    width:10px; height:10px; background:var(--accent);
+    border-radius:50%; box-shadow:0 0 8px var(--accent);
+    animation:pulse 2s infinite;
+  }
+  @keyframes pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.6;transform:scale(1.3)}}
+  .logo-text { font-size:13px; font-weight:600; color:var(--muted); letter-spacing:.05em; text-transform:uppercase; }
+  .live-clock { font-family:'IBM Plex Mono',monospace; font-size:14px; color:var(--accent); }
+
+  .card {
+    width:100%; max-width:540px; background:var(--surface);
+    border:1px solid var(--border); border-radius:16px;
+    padding:28px 28px 24px; margin-top:12px;
+  }
+  .card-title { font-size:20px; font-weight:700; margin-bottom:4px; }
+  .card-sub { font-size:13px; color:var(--muted); margin-bottom:24px; }
+
+  .status-toggle { display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:24px; }
+  .status-btn {
+    border:2px solid var(--border); background:var(--surface2);
+    border-radius:12px; padding:16px 12px; cursor:pointer;
+    transition:all .2s; text-align:center;
+  }
+  .status-btn:hover { border-color:var(--muted); transform:translateY(-1px); }
+  .status-btn.active-wfh { border-color:var(--wfh); background:rgba(6,214,160,.08); box-shadow:0 0 20px rgba(6,214,160,.15); }
+  .status-btn.active-office { border-color:var(--office); background:rgba(247,127,0,.08); box-shadow:0 0 20px rgba(247,127,0,.15); }
+  .status-icon { font-size:28px; margin-bottom:6px; }
+  .status-label { font-size:15px; font-weight:600; }
+  .status-desc { font-size:11px; color:var(--muted); margin-top:2px; }
+
+  .form-grid { display:grid; grid-template-columns:1fr 1fr; gap:14px; margin-bottom:14px; }
+  .form-full { grid-column:1/-1; }
+  label { display:block; font-size:12px; font-weight:600; color:var(--muted); text-transform:uppercase; letter-spacing:.05em; margin-bottom:6px; }
+  input, textarea {
+    width:100%; background:var(--surface2); border:1px solid var(--border);
+    border-radius:8px; padding:10px 12px;
+    font-family:'Sarabun',sans-serif; font-size:14px; color:var(--text);
+    outline:none; transition:border-color .2s;
+  }
+  input:focus, textarea:focus { border-color:var(--accent); box-shadow:0 0 0 3px rgba(0,180,216,.1); }
+  input[readonly] { color:var(--muted); cursor:default; background:rgba(28,35,48,.6); }
+  input.autofilled { color:var(--text) !important; border-color:rgba(6,214,160,.35) !important; }
+  textarea { resize:none; height:70px; }
+
+  /* ID field wrapper with spinner */
+  .id-wrap { position:relative; }
+  .id-spinner {
+    display:none; position:absolute; right:12px; top:50%; transform:translateY(-50%);
+    width:14px; height:14px; border:2px solid var(--border);
+    border-top-color:var(--accent); border-radius:50%;
+    animation:spin .6s linear infinite;
+  }
+  .id-spinner.show { display:block; }
+  @keyframes spin{to{transform:translateY(-50%) rotate(360deg)}}
+
+  /* Lookup result banner */
+  .emp-found {
+    display:none; margin-top:8px; padding:9px 13px;
+    background:rgba(6,214,160,.07); border:1px solid rgba(6,214,160,.25);
+    border-radius:8px; font-size:13px; color:var(--wfh);
+    align-items:center; gap:8px;
+  }
+  .emp-found.show { display:flex; }
+  .emp-not-found {
+    display:none; margin-top:8px; padding:9px 13px;
+    background:rgba(248,81,73,.07); border:1px solid rgba(248,81,73,.25);
+    border-radius:8px; font-size:13px; color:var(--danger);
+  }
+  .emp-not-found.show { display:block; }
+
+  .action-row { display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-top:20px; }
+  .btn {
+    padding:14px; border-radius:10px; border:none;
+    font-family:'Sarabun',sans-serif; font-size:15px; font-weight:600;
+    cursor:pointer; transition:all .2s;
+    display:flex; align-items:center; justify-content:center; gap:8px;
+  }
+  .btn-checkin { background:linear-gradient(135deg,var(--wfh),#00c4b0); color:#0d1117; }
+  .btn-checkin:hover { transform:translateY(-2px); box-shadow:0 8px 20px rgba(6,214,160,.3); }
+  .btn-checkout { background:var(--surface2); border:2px solid var(--border); color:var(--text); }
+  .btn-checkout:hover { border-color:var(--danger); color:var(--danger); }
+  .btn:disabled { opacity:.4; cursor:not-allowed; transform:none !important; }
+
+  .status-indicator {
+    margin-top:16px; padding:12px 16px; border-radius:8px;
+    font-size:13px; display:none; align-items:center; gap:10px;
+  }
+  .status-indicator.show { display:flex; }
+  .status-indicator.success { background:rgba(6,214,160,.1); border:1px solid rgba(6,214,160,.3); color:var(--wfh); }
+  .status-indicator.error   { background:rgba(248,81,73,.1);  border:1px solid rgba(248,81,73,.3);  color:var(--danger); }
+  .status-indicator.info    { background:rgba(0,180,216,.1);  border:1px solid rgba(0,180,216,.3);  color:var(--accent); }
+
+  .today-box {
+    width:100%; max-width:540px; margin-top:16px;
+    background:var(--surface); border:1px solid var(--border);
+    border-radius:16px; padding:20px 24px;
+  }
+  .today-header { font-size:12px; font-weight:600; color:var(--muted); text-transform:uppercase; letter-spacing:.08em; margin-bottom:14px; }
+  .today-entry {
+    display:flex; align-items:center; justify-content:space-between;
+    padding:10px 0; border-bottom:1px solid var(--border); font-size:14px;
+  }
+  .today-entry:last-child { border-bottom:none; }
+  .entry-name { font-weight:600; }
+  .entry-meta { display:flex; gap:10px; align-items:center; }
+  .tag { font-size:11px; font-weight:700; padding:3px 8px; border-radius:4px; letter-spacing:.04em; }
+  .tag-wfh { background:rgba(6,214,160,.15); color:var(--wfh); }
+  .tag-office { background:rgba(247,127,0,.15); color:var(--office); }
+  .entry-time { font-family:'IBM Plex Mono',monospace; font-size:12px; color:var(--muted); }
+
+  .footer { margin-top:32px; font-size:11px; color:var(--muted); text-align:center; }
+  .footer span { color:var(--accent); }
+  .required::after { content:' *'; color:var(--danger); }
+</style>
+</head>
+<body>
+
+<div class="top-bar">
+  <div class="logo">
+    <div class="logo-dot"></div>
+    <span class="logo-text">ระบบลงเวลา WFH/Office</span>
+  </div>
+  <div class="live-clock" id="clock">--:--:--</div>
+</div>
+
+<div class="card">
+  <div class="card-title">บันทึกเวลาปฏิบัติงาน</div>
+  <div class="card-sub" id="dateDisplay">กำลังโหลด...</div>
+
+  <div class="status-toggle">
+    <div class="status-btn" id="btn-wfh" onclick="selectStatus('WFH')">
+      <div class="status-icon">🏠</div>
+      <div class="status-label">Work From Home</div>
+      <div class="status-desc">ปฏิบัติงานจากที่บ้าน</div>
+    </div>
+    <div class="status-btn" id="btn-office" onclick="selectStatus('Office')">
+      <div class="status-icon">🏢</div>
+      <div class="status-label">Office</div>
+      <div class="status-desc">ปฏิบัติงานที่สำนักงาน</div>
+    </div>
+  </div>
+
+  <div class="form-grid">
+    <!-- รหัสพนักงาน -->
+    <div class="form-full">
+      <label class="required">รหัสพนักงาน</label>
+      <div class="id-wrap">
+        <input type="text" id="empId" placeholder="กรอกรหัสพนักงาน — ชื่อและฝ่ายจะแสดงอัตโนมัติ"
+               maxlength="10" oninput="onEmpIdInput()">
+        <div class="id-spinner" id="idSpinner"></div>
+      </div>
+      <div class="emp-found" id="empFound">✅ <span id="empFoundText"></span></div>
+      <div class="emp-not-found" id="empNotFound">⚠ ไม่พบรหัสพนักงานนี้ในระบบ — กรุณาตรวจสอบ</div>
+    </div>
+
+    <div>
+      <label>ชื่อ-นามสกุล</label>
+      <input type="text" id="empName" readonly placeholder="กรอกอัตโนมัติ">
+    </div>
+    <div>
+      <label>ตำแหน่ง</label>
+      <input type="text" id="empPosition" readonly placeholder="กรอกอัตโนมัติ">
+    </div>
+    <div class="form-full">
+      <label>สังกัด</label>
+      <input type="text" id="department" readonly placeholder="กรอกอัตโนมัติ">
+    </div>
+
+    <div class="form-full">
+      <label>หมายเหตุ / งานหลักวันนี้ (ไม่บังคับ)</label>
+      <textarea id="note" placeholder="ระบุงานหลักที่จะดำเนินการวันนี้..."></textarea>
+    </div>
+  </div>
+
+  <div class="action-row">
+    <button class="btn btn-checkin" onclick="submitCheckin()" id="checkinBtn">⏱ บันทึกเวลาเข้างาน</button>
+    <button class="btn btn-checkout" onclick="submitCheckout()" id="checkoutBtn">🚪 บันทึกเวลาออกงาน</button>
+  </div>
+
+  <div class="status-indicator" id="statusMsg"></div>
+</div>
+
+<div class="today-box">
+  <div class="today-header">📋 บันทึกวันนี้</div>
+  <div id="logList">
+    <div class="today-entry">
+      <div>
+        <div class="entry-name">สมชาย รักงาน</div>
+        <div style="font-size:11px;color:var(--muted);margin-top:2px">ฝ่าย Compliance</div>
+      </div>
+      <div class="entry-meta">
+        <span class="tag tag-wfh">WFH</span>
+        <span class="entry-time">08:32 น.</span>
+      </div>
+    </div>
+    <div class="today-entry">
+      <div>
+        <div class="entry-name">วิไล ดีใจ</div>
+        <div style="font-size:11px;color:var(--muted);margin-top:2px">ฝ่ายการเงิน</div>
+      </div>
+      <div class="entry-meta">
+        <span class="tag tag-office">Office</span>
+        <span class="entry-time">08:15 น.</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="footer">ระบบลงเวลาปฏิบัติงาน · พัฒนาด้วย <span>Google Apps Script</span> · ข้อมูลบันทึกใน Google Sheets</div>
+
+<script>
+// ================================================================
+// 🔧 CONFIG
+// ================================================================
+// 🔧 CONFIG — ใส่ Web App URL หลัง Deploy Apps Script
+//    ถ้ายังไม่ได้ Deploy ระบบจะใช้ STAFF_DB ด้านล่างแทนอัตโนมัติ
+// ================================================================
+const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/YOUR_SCRIPT_ID/exec';
+const URL_CONFIGURED  = !APPS_SCRIPT_URL.includes('YOUR_SCRIPT_ID');
+
+// ================================================================
+// 📋 STAFF_DB — ข้อมูลสำรอง ใช้เมื่อยังไม่ได้เชื่อม Apps Script
+//    รูปแบบ: 'รหัส': { name, position, dept }
+//    ✏️ แก้ให้ตรงกับพนักงานจริงได้เลย
+// ================================================================
+const STAFF_DB = {
+  '10001': { name: 'สมชาย รักงาน',      position: 'รองผู้อำนวยการ',        dept: 'ฝ่าย Compliance' },
+  '10002': { name: 'วิไล ดีใจ',          position: 'นักวิเคราะห์นโยบาย',    dept: 'ฝ่ายการเงิน' },
+  '10003': { name: 'ประเสริฐ มุ่งมั่น',  position: 'วิศวกรไฟฟ้า',           dept: 'ฝ่ายปฏิบัติการ' },
+  '10004': { name: 'นิดา ใจดี',          position: 'นักทรัพยากรบุคคล',      dept: 'ฝ่ายทรัพยากรบุคคล' },
+  '10005': { name: 'วิชัย ก้าวหน้า',     position: 'วิศวกรระบบ',            dept: 'ฝ่ายเทคโนโลยีสารสนเทศ' },
+  '10006': { name: 'สุดา มีน้ำใจ',       position: 'เจ้าหน้าที่ Compliance', dept: 'ฝ่าย Compliance' },
+  '10007': { name: 'บุญมี ตั้งใจ',       position: 'ผู้ตรวจสอบภายใน',       dept: 'ฝ่ายตรวจสอบภายใน' },
+  '10008': { name: 'รัตนา สุขสม',        position: 'นักบัญชี',              dept: 'ฝ่ายการเงิน' },
+  '10009': { name: 'กิตติ ขยันดี',       position: 'ช่างไฟฟ้า',             dept: 'ฝ่ายปฏิบัติการ' },
+  '10010': { name: 'อรทัย รุ่งเรือง',    position: 'นักตรวจสอบ',            dept: 'ฝ่ายตรวจสอบภายใน' },
+};
+
+// ================================================================
+// 📡 STAFF CACHE
+// ================================================================
+let staffCache  = {};
+let staffLoaded = false;
+
+async function preloadStaff() {
+  // ยังไม่ได้ Deploy → ใช้ STAFF_DB ทันที ไม่ต้อง fetch
+  if (!URL_CONFIGURED) {
+    Object.entries(STAFF_DB).forEach(([id, emp]) => { staffCache[id] = emp; });
+    staffLoaded = true;
+    return;
+  }
+  // Deploy แล้ว → ดึงจาก Sheet
+  try {
+    const res  = await fetch(`${APPS_SCRIPT_URL}?action=getAllStaff`);
+    const json = await res.json();
+    if (json.success && json.staff) {
+      json.staff.forEach(s => {
+        staffCache[s.empId] = { name: s.name, position: s.position || '', dept: s.dept };
+      });
+      staffLoaded = true;
+    }
+  } catch(e) {
+    // ถ้า fetch ล้มเหลว → fallback STAFF_DB
+    Object.entries(STAFF_DB).forEach(([id, emp]) => { staffCache[id] = emp; });
+    staffLoaded = true;
+    console.warn('ใช้ข้อมูลสำรอง STAFF_DB');
+  }
+}
+
+// ================================================================
+// Clock
+// ================================================================
+function updateClock() {
+  const now = new Date();
+  const p = n => String(n).padStart(2,'0');
+  document.getElementById('clock').textContent = `${p(now.getHours())}:${p(now.getMinutes())}:${p(now.getSeconds())}`;
+  const days   = ['อาทิตย์','จันทร์','อังคาร','พุธ','พฤหัสบดี','ศุกร์','เสาร์'];
+  const months = ['มกราคม','กุมภาพันธ์','มีนาคม','เมษายน','พฤษภาคม','มิถุนายน',
+                  'กรกฎาคม','สิงหาคม','กันยายน','ตุลาคม','พฤศจิกายน','ธันวาคม'];
+  document.getElementById('dateDisplay').textContent =
+    `วัน${days[now.getDay()]}ที่ ${now.getDate()} ${months[now.getMonth()]} พ.ศ. ${now.getFullYear()+543}`;
+}
+setInterval(updateClock,1000); updateClock();
+
+// โหลดรายชื่อพนักงานทั้งหมดจาก Sheet ทันทีที่หน้าเปิด
+preloadStaff();
+
+// ================================================================
+// Status Toggle
+// ================================================================
+let selectedStatus = null;
+function selectStatus(type) {
+  selectedStatus = type;
+  document.getElementById('btn-wfh').className    = 'status-btn' + (type==='WFH'    ? ' active-wfh'    : '');
+  document.getElementById('btn-office').className = 'status-btn' + (type==='Office' ? ' active-office' : '');
+}
+
+// ================================================================
+// Employee Lookup — ค้นจาก cache ก่อน ถ้าไม่มีค่อย fetch ทีละคน
+// ================================================================
+let debounceTimer = null;
+
+function onEmpIdInput() {
+  clearTimeout(debounceTimer);
+  clearEmpFields();
+  const id = document.getElementById('empId').value.trim();
+  if (id.length >= 3) {
+    document.getElementById('idSpinner').classList.add('show');
+    debounceTimer = setTimeout(() => lookupEmployee(id), 400);
+  }
+}
+
+async function lookupEmployee(id) {
+  // รอ preload ให้เสร็จก่อน (กรณีกรอกเร็วมากตอนหน้าเพิ่งเปิด)
+  if (!staffLoaded) {
+    await preloadStaff();
+  }
+
+  document.getElementById('idSpinner').classList.remove('show');
+
+  // ค้นจาก cache
+  if (staffCache[id]) {
+    fillEmpFields(id, staffCache[id]);
+    return;
+  }
+
+  // ไม่เจอใน cache และ URL พร้อม → fetch ทีละคน (fallback)
+  if (URL_CONFIGURED) {
+    document.getElementById('idSpinner').classList.add('show');
+    try {
+      const res  = await fetch(`${APPS_SCRIPT_URL}?action=getStaff&empId=${encodeURIComponent(id)}`);
+      const json = await res.json();
+      document.getElementById('idSpinner').classList.remove('show');
+      if (json.success && json.emp) {
+        staffCache[id] = { name: json.emp.name, position: json.emp.position || '', dept: json.emp.dept };
+        fillEmpFields(id, staffCache[id]);
+        return;
+      }
+    } catch(e) {
+      document.getElementById('idSpinner').classList.remove('show');
+    }
+  }
+
+  showNotFound();
+}
+
+function fillEmpFields(id, emp) {
+  document.getElementById('empName').value       = emp.name;
+  document.getElementById('empPosition').value   = emp.position || '';
+  document.getElementById('department').value    = emp.dept;
+  document.getElementById('empName').classList.add('autofilled');
+  document.getElementById('empPosition').classList.add('autofilled');
+  document.getElementById('department').classList.add('autofilled');
+  document.getElementById('empFoundText').textContent = `${emp.name} · ${emp.position || ''} · ${emp.dept}`;
+  document.getElementById('empFound').classList.add('show');
+  document.getElementById('empNotFound').classList.remove('show');
+}
+
+function showNotFound() {
+  document.getElementById('empNotFound').classList.add('show');
+  document.getElementById('empFound').classList.remove('show');
+}
+
+function clearEmpFields() {
+  ['empName','empPosition','department'].forEach(fid => {
+    document.getElementById(fid).value = '';
+    document.getElementById(fid).classList.remove('autofilled');
+  });
+  document.getElementById('empFound').classList.remove('show');
+  document.getElementById('empNotFound').classList.remove('show');
+}
+
+// ================================================================
+// Validation
+// ================================================================
+function validate() {
+  if (!selectedStatus) {
+    showMsg('⚠ กรุณาเลือกสถานะ WFH หรือ Office ก่อน', 'error'); return false;
+  }
+  if (!document.getElementById('empId').value.trim()) {
+    showMsg('⚠ กรุณากรอกรหัสพนักงาน', 'error'); return false;
+  }
+  if (!document.getElementById('empName').value.trim()) {
+    showMsg('⚠ ไม่พบข้อมูลพนักงาน — กรุณาตรวจสอบรหัส', 'error'); return false;
+  }
+  return true;
+}
+
+// ================================================================
+// Submit
+// ================================================================
+function collectData(action) {
+  const now = new Date();
+  const p = n => String(n).padStart(2,'0');
+  return {
+    timestamp:  now.toISOString(),
+    date:       `${p(now.getDate())}/${p(now.getMonth()+1)}/${now.getFullYear()+543}`,
+    time:       `${p(now.getHours())}:${p(now.getMinutes())}`,
+    action,
+    status:     selectedStatus,
+    empId:      document.getElementById('empId').value.trim(),
+    empName:    document.getElementById('empName').value.trim(),
+    position:   document.getElementById('empPosition').value.trim(),
+    department: document.getElementById('department').value.trim(),
+    note:       document.getElementById('note').value.trim()
+  };
+}
+
+async function postData(data) {
+  // ยังไม่ได้ Deploy → simulate success (demo mode)
+  if (!URL_CONFIGURED) {
+    return new Promise(resolve => setTimeout(() => resolve({ success: true }), 600));
+  }
+
+  // GitHub Pages (https) → Apps Script ยอมรับ fetch POST ได้ปกติ
+  try {
+    const res = await fetch(APPS_SCRIPT_URL, {
+      method:   'POST',
+      headers:  { 'Content-Type': 'text/plain' }, // ใช้ text/plain หลีกเลี่ยง preflight
+      body:     JSON.stringify(data),
+      redirect: 'follow'
+    });
+    const json = await res.json();
+    return json;
+  } catch(err) {
+    throw new Error(err.message);
+  }
+}
+
+async function submitCheckin() {
+  if (!validate()) return;
+  const btn = document.getElementById('checkinBtn');
+  btn.disabled = true; btn.textContent = '⏳ กำลังบันทึก...';
+  try {
+    const data = collectData('CHECKIN');
+    const result = await postData(data);
+    if (result.success) {
+      showMsg(`✅ บันทึกเวลาเข้างาน ${data.time} น. เรียบร้อย (${data.status})`, 'success');
+      addLogEntry(data);
+      btn.textContent = `✅ เข้างานแล้ว ${data.time} น.`;
+    } else throw new Error(result.error || 'Unknown error');
+  } catch(e) {
+    showMsg('❌ เกิดข้อผิดพลาด: ' + e.message, 'error');
+    btn.disabled = false; btn.textContent = '⏱ บันทึกเวลาเข้างาน';
+  }
+}
+
+async function submitCheckout() {
+  if (!document.getElementById('empId').value.trim()) {
+    showMsg('⚠ กรุณากรอกรหัสพนักงานก่อน', 'error'); return;
+  }
+  if (!document.getElementById('empName').value.trim()) {
+    showMsg('⚠ ไม่พบข้อมูลพนักงาน', 'error'); return;
+  }
+  const btn = document.getElementById('checkoutBtn');
+  btn.disabled = true; btn.textContent = '⏳ กำลังบันทึก...';
+  try {
+    const data = collectData('CHECKOUT');
+    const result = await postData(data);
+    if (result.success) {
+      showMsg(`✅ บันทึกเวลาออกงาน ${data.time} น. เรียบร้อย`, 'info');
+      btn.textContent = `✅ ออกงานแล้ว ${data.time} น.`;
+    } else throw new Error(result.error || 'Unknown error');
+  } catch(e) {
+    showMsg('❌ เกิดข้อผิดพลาด: ' + e.message, 'error');
+    btn.disabled = false; btn.textContent = '🚪 บันทึกเวลาออกงาน';
+  }
+}
+
+// ================================================================
+// Helpers
+// ================================================================
+function showMsg(text, type) {
+  const el = document.getElementById('statusMsg');
+  el.textContent = text;
+  el.className = `status-indicator show ${type}`;
+  setTimeout(() => el.className = 'status-indicator', 5000);
+}
+
+function addLogEntry(data) {
+  const list = document.getElementById('logList');
+  const tagClass = data.status==='WFH' ? 'tag-wfh' : 'tag-office';
+  const el = document.createElement('div');
+  el.className = 'today-entry';
+  el.innerHTML = `
+    <div>
+      <div class="entry-name">${data.empName}</div>
+      <div style="font-size:11px;color:var(--muted);margin-top:2px">${data.department}</div>
+    </div>
+    <div class="entry-meta">
+      <span class="tag ${tagClass}">${data.status}</span>
+      <span class="entry-time">${data.time} น.</span>
+    </div>`;
+  list.prepend(el);
+}
+</script>
+</body>
+</html>
