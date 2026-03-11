@@ -227,7 +227,7 @@
 // 🔧 CONFIG — ใส่ Web App URL หลัง Deploy Apps Script
 //    ถ้ายังไม่ได้ Deploy ระบบจะใช้ STAFF_DB ด้านล่างแทนอัตโนมัติ
 // ================================================================
-const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbze7Y4Ax1GfsWcfDkatvbAbNrILQAoQou1T8LVxe8yiYqhZaVIZsTTJ7dsABO1woJb5/exec';
+const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/YOUR_SCRIPT_ID/exec';
 const URL_CONFIGURED  = !APPS_SCRIPT_URL.includes('YOUR_SCRIPT_ID');
 
 // ================================================================
@@ -255,28 +255,26 @@ let staffCache  = {};
 let staffLoaded = false;
 
 async function preloadStaff() {
-  // ยังไม่ได้ Deploy → ใช้ STAFF_DB ทันที ไม่ต้อง fetch
   if (!URL_CONFIGURED) {
     Object.entries(STAFF_DB).forEach(([id, emp]) => { staffCache[id] = emp; });
     staffLoaded = true;
     return;
   }
-  // Deploy แล้ว → ดึงจาก Sheet
   try {
-    const res  = await fetch(`${APPS_SCRIPT_URL}?action=getAllStaff`);
-    const json = await res.json();
+    const res  = await fetch(`${APPS_SCRIPT_URL}?action=getAllStaff`, { redirect: 'follow' });
+    const text = await res.text();
+    const json = JSON.parse(text);
     if (json.success && json.staff) {
       json.staff.forEach(s => {
         staffCache[s.empId] = { name: s.name, position: s.position || '', dept: s.dept };
       });
-      staffLoaded = true;
     }
   } catch(e) {
-    // ถ้า fetch ล้มเหลว → fallback STAFF_DB
+    // fallback → ใช้ STAFF_DB
     Object.entries(STAFF_DB).forEach(([id, emp]) => { staffCache[id] = emp; });
-    staffLoaded = true;
-    console.warn('ใช้ข้อมูลสำรอง STAFF_DB');
+    console.warn('preloadStaff fallback to STAFF_DB');
   }
+  staffLoaded = true; // ← รับประกันว่า set เสมอ ไม่ว่าจะสำเร็จหรือไม่
 }
 
 // ================================================================
@@ -294,9 +292,12 @@ function updateClock() {
 }
 setInterval(updateClock,1000); updateClock();
 
-// โหลดข้อมูลตอนเปิดหน้า — รัน parallel กัน ไม่รอกัน
-preloadStaff();
-loadTodayLog();
+// โหลดตามลำดับ — staff ก่อน แล้วค่อย today log
+async function init() {
+  await preloadStaff();
+  await loadTodayLog();
+}
+init();
 
 // Auto-refresh บันทึกวันนี้ทุก 30 วินาที
 setInterval(loadTodayLog, 30000);
